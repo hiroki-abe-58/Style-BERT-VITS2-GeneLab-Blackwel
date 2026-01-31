@@ -1,3 +1,222 @@
+# Style-Bert-VITS2 GeneLab-Blackwell Edition
+
+**RTX 5090 (Blackwell / sm_120) 完全対応版**
+
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![Python 3.10](https://img.shields.io/badge/python-3.10-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch Nightly](https://img.shields.io/badge/PyTorch-nightly%20cu128-red.svg)](https://pytorch.org/)
+
+---
+
+## このフォーク版について
+
+本リポジトリは、[litagin02/Style-Bert-VITS2](https://github.com/litagin02/Style-Bert-VITS2) をベースに、**NVIDIA RTX 5090 (Blackwell世代 / CUDA Compute Capability sm_120)** でのWindowsネイティブ環境におけるGPU動作を実現したフォーク版です。
+
+### 技術的な特徴
+
+| 機能 | オリジナル版 | GeneLab-Blackwell Edition |
+|------|-------------|---------------------------|
+| RTX 5090 (sm_120) | 非対応 | **完全対応** |
+| PyTorch | 安定版 (cu118/cu124) | **nightly cu128** |
+| triton | Linux専用 | **triton-windows統合** |
+| GPU自動検出 | 手動設定 | **自動フォールバック機構** |
+
+---
+
+## なぜ環境構築が大変なのか（オリジナル版の問題）
+
+RTX 5090をお持ちの方がオリジナル版をそのままインストールしようとすると、以下のエラーに遭遇します：
+
+### 1. CUDA Compute Capability エラー
+
+```
+NVIDIA GeForce RTX 5090 with CUDA capability sm_120 is not compatible 
+with the current PyTorch installation.
+The current PyTorch install supports CUDA capabilities sm_50 sm_60 sm_61 sm_70 sm_75 sm_80 sm_86 sm_90.
+```
+
+**原因**: PyTorch安定版（2.6.0等）はsm_120をサポートしていない
+
+### 2. Triton衝突エラー
+
+```
+triton.runtime.errors.OutOfResources: ...
+```
+
+**原因**: 公式TritonはLinux専用。PyTorchが依存関係で自動インストールするが、Windowsでは動作しない
+
+### 3. パッケージインストール順序の罠
+
+PyTorchを後からインストールすると、requirements.txtの依存解決でPyTorch安定版に上書きされてしまう
+
+### 4. FlashAttention非対応
+
+WindowsではFlashAttention 2が使えないため、手動でSDPAへの切り替えが必要
+
+---
+
+## このバージョンを使うメリット
+
+- **上記の問題をすべて解決済み**
+- ドキュメント化されたインストール手順
+- 動作確認済み環境の情報提供
+- triton-windowsが正しい順序でインストールされる
+- 自動CPU/GPUフォールバック機構搭載
+
+---
+
+## 動作確認済み環境
+
+```
+PyTorch: 2.11.0.dev20260119+cu128
+CUDA available: True
+CUDA version: 12.8
+GPU: NVIDIA GeForce RTX 5090
+GPU computation test: SUCCESS
+```
+
+| 項目 | 値 |
+|------|-----|
+| OS | Windows 11 |
+| GPU | NVIDIA GeForce RTX 5090 (32GB VRAM) |
+| Driver | 581.63 |
+| CUDA (nvidia-smi) | 13.0 |
+| Python | 3.10.x |
+| PyTorch | 2.11.0.dev+cu128 (nightly) |
+
+---
+
+## インストール手順（RTX 5090向け）
+
+### 前提条件
+
+- Windows 11
+- NVIDIA RTX 5090 + Driver 580.x以降
+- Python 3.10.x
+- Git
+
+### 手順
+
+```powershell
+# 1. リポジトリをクローン
+git clone https://github.com/hiroki-abe-58/Style-BERT-VITS2-GeneLab-Blackwel.git
+cd Style-BERT-VITS2-GeneLab-Blackwel
+
+# 2. 仮想環境を作成
+python -m venv venv
+.\venv\Scripts\Activate.ps1
+
+# 3. pipをアップグレード
+pip install --upgrade pip
+
+# 4. 【重要】triton-windowsを先にインストール
+pip install triton-windows
+
+# 5. 【重要】PyTorch nightly cu128をインストール
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+
+# 6. その他の依存関係をインストール
+pip install -r requirements.txt
+
+# 7. 初期化（必要なモデルをダウンロード）
+python initialize.py
+```
+
+### 動作確認
+
+```powershell
+python -c "import torch; print('CUDA:', torch.cuda.is_available()); print('GPU:', torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'N/A')"
+```
+
+期待される出力:
+```
+CUDA: True
+GPU: NVIDIA GeForce RTX 5090
+```
+
+### 音声合成エディターの起動
+
+```powershell
+python server_editor.py --inbrowser
+```
+
+---
+
+## ミドルウェア依存関係
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Style-Bert-VITS2                         │
+├─────────────────────────────────────────────────────────────┤
+│  Gradio UI  │  TTS Engine  │  BERT Models  │  Audio I/O    │
+├─────────────────────────────────────────────────────────────┤
+│                      PyTorch Layer                          │
+│  torch 2.11.0.dev+cu128  │  torchaudio  │  torchvision     │
+├─────────────────────────────────────────────────────────────┤
+│                    GPU Acceleration                         │
+│  triton-windows 3.5.x  │  CUDA 12.8 (bundled)              │
+├─────────────────────────────────────────────────────────────┤
+│                    NVIDIA Driver                            │
+│  Driver 580.x+  │  CUDA Capability sm_120 (Blackwell)      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## よくあるエラーと解決策
+
+| エラー | 原因 | 解決策 |
+|--------|------|--------|
+| `sm_120 is not compatible` | PyTorch安定版を使用 | PyTorch nightly cu128をインストール |
+| `triton.runtime.errors` | triton衝突 | `pip uninstall triton` → `pip install triton-windows` |
+| `DLL load failed` | CUDA不整合 | venvを再作成 |
+| `CUDA out of memory` | VRAM不足 | `--device cpu`オプションで起動 |
+
+---
+
+## オリジナルへの敬意・謝辞
+
+本フォーク版は、以下のプロジェクトの素晴らしい成果の上に成り立っています：
+
+- **[litagin02/Style-Bert-VITS2](https://github.com/litagin02/Style-Bert-VITS2)** - オリジナル開発者のlitagin02氏に深く感謝いたします
+- **[fishaudio/Bert-VITS2](https://github.com/fishaudio/Bert-VITS2)** - Bert-VITS2のオリジナル実装
+- **[Zuntan03/EasyBertVits2](https://github.com/Zuntan03/EasyBertVits2)** - 簡易インストーラーの参考
+
+RTX 5090対応は、オリジナルのコードベースを尊重しつつ、最新GPUでの動作を可能にするための最小限の変更に留めています。
+
+---
+
+## 免責事項
+
+- 本フォーク版は**無保証**で提供されます
+- 動作の保証、サポートの提供は行いません
+- 本ソフトウェアの使用によって生じたいかなる損害についても、開発者は責任を負いません
+- RTX 5090以外の環境での動作は確認していません
+- PyTorch nightly版を使用するため、将来的に互換性の問題が発生する可能性があります
+
+---
+
+## ライセンス
+
+本リポジトリは、オリジナルの[Style-Bert-VITS2](https://github.com/litagin02/Style-Bert-VITS2)と同じく **GNU Affero General Public License v3.0 (AGPL-3.0)** でライセンスされています。
+
+詳細は [LICENSE](LICENSE) を参照してください。
+
+また、`text/user_dict/` モジュールは [VOICEVOX engine](https://github.com/VOICEVOX/voicevox_engine) から継承した **GNU Lesser General Public License v3.0 (LGPL-3.0)** でライセンスされています。詳細は [LGPL_LICENSE](LGPL_LICENSE) を参照してください。
+
+---
+
+## 連絡先
+
+- GitHub: [@hiroki-abe-58](https://github.com/hiroki-abe-58)
+- 活動名: GeneLab
+
+---
+
+# 以下、オリジナルのREADME
+
+---
+
 # Style-Bert-VITS2
 
 **利用の際は必ず[お願いとデフォルトモデルの利用規約](/docs/TERMS_OF_USE.md)をお読みください。**

@@ -45,3 +45,35 @@ safetensors.ipynb
 
 playground.ipynb
 playgrounds/
+
+# ========================================
+# GeneLab-Blackwell Edition 追加ルール
+# ========================================
+
+# バックアップ仮想環境
+venv_backup*/
+
+# 環境変数・認証情報
+.env
+.env.*
+*.key
+*.pem
+*secret*
+*credential*
+*account*
+secrets/
+
+# ログファイル
+*.log
+logs/
+
+# ローカルドキュメント
+/Documents/
+
+# Hugging Face キャッシュ
+.cache/
+huggingface/
+
+# Windows固有
+Thumbs.db
+Desktop.ini
